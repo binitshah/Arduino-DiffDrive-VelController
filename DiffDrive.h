@@ -162,11 +162,11 @@ void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
     is_conservative = atoi(cons_command);
 
     Serial.print("<");
-    Serial.print(x);
+    Serial.print(x, 6);
     Serial.print(",");
-    Serial.print(y);
+    Serial.print(y, 6);
     Serial.print(",");
-    Serial.print(theta);
+    Serial.print(theta, 6);
     Serial.println(">");
 
     x = 0;
