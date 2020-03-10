@@ -94,7 +94,7 @@ class DiffDrive {
         bool is_conservative = false;
         uint32_t sample_time = 10000; // unit: microseconds
         uint32_t prev_time_odom, prev_time_pid = 0; // unit: microseconds
-        uint32_t prev_encoder_count_left, prev_encoder_count_right = 0; // unit: counts
+        int32_t prev_encoder_count_left, prev_encoder_count_right = 0; // unit: counts
 
         String input = "";
         const char start_marker = '<';
@@ -104,7 +104,8 @@ class DiffDrive {
 
 // -------- Private Methods -------- //
 
-const int8_t encoder_table[] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};
+const int8_t encoder_table_left[] = {0,1,-1,0,-1,0,0,1,1,0,0,-1,0,-1,1,0};
+const int8_t encoder_table_right[] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};
 
 template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
          int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
@@ -132,7 +133,7 @@ void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
                pwm_right, dir1_right, dir2_right, enca_right, encb_right>::encoder_isr_left() {
     enc_val_left = (enc_val_left << 2) | (digitalRead(enca_left) << 1) | digitalRead(encb_left);
 
-    encoder_count_left += encoder_table[enc_val_left & 0b1111];
+    encoder_count_left += encoder_table_left[enc_val_left & 0b1111];
 }
 
 template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
@@ -141,7 +142,7 @@ void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
                pwm_right, dir1_right, dir2_right, enca_right, encb_right>::encoder_isr_right() {
     enc_val_right = (enc_val_right << 2) | (digitalRead(enca_right) << 1) | digitalRead(encb_right);
 
-    encoder_count_right += encoder_table[enc_val_right & 0b1111];
+    encoder_count_right += encoder_table_right[enc_val_right & 0b1111];
 }
 
 template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
@@ -272,32 +273,35 @@ template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_lef
          int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
 void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
           pwm_right, dir1_right, dir2_right, enca_right, encb_right>::loop() {
-    noInterrupts();
-    double dcount_left = prev_encoder_count_left - encoder_count_left;
-    prev_encoder_count_left = encoder_count_left;
-    double dcount_right = prev_encoder_count_right - encoder_count_right;
-    prev_encoder_count_right = encoder_count_right;
-    interrupts();
     uint32_t curr_time = micros();
-    double dt = curr_time - prev_time_odom;
-    if (dt > 0.0) {
-        wcurr_left = ((dcount_left / dt) / gearbox_cpr) * MICROSECONDS_PER_SECOND * TWO_PI;
-        wcurr_right = ((dcount_right / dt) / gearbox_cpr) * MICROSECONDS_PER_SECOND * TWO_PI;
-
-        double xdot = wcurr_left * ((wheel_radius / 2 * cos(theta)) + (wheel_radius * (single_intept_dist / wheel_base) * sin(theta))) +
-                      wcurr_right * ((wheel_radius / 2 * cos(theta)) - (wheel_radius * (single_intept_dist / wheel_base) * sin(theta)));
-        double ydot = wcurr_left * ((wheel_radius / 2 * sin(theta)) - (wheel_radius * (single_intept_dist / wheel_base) * cos(theta))) +
-                      wcurr_right * ((wheel_radius / 2 * sin(theta)) + (wheel_radius * (single_intept_dist / wheel_base) * cos(theta)));
-        double thetadot = wcurr_right * (wheel_radius / wheel_base) - wcurr_left * (wheel_radius / wheel_base);
-
-        x += xdot * dt;
-        y += ydot * dt;
-        theta += thetadot * dt;
-        theta = fmod(theta, TWO_PI);
-    }
-    prev_time_odom = curr_time;
-    
     if (curr_time - prev_time_pid > sample_time) {
+        noInterrupts();
+        double dcount_left = prev_encoder_count_left - encoder_count_left;
+        prev_encoder_count_left = encoder_count_left;
+        double dcount_right = prev_encoder_count_right - encoder_count_right;
+        prev_encoder_count_right = encoder_count_right;
+        interrupts();
+        double dt = curr_time - prev_time_odom;
+        if (dt > 0.0) {
+            wcurr_left = ((dcount_left / dt) / gearbox_cpr) * MICROSECONDS_PER_SECOND * TWO_PI;
+            wcurr_right = ((dcount_right / dt) / gearbox_cpr) * MICROSECONDS_PER_SECOND * TWO_PI;
+
+            double xdot = wcurr_left * ((wheel_radius / 2 * cos(theta)) + (wheel_radius * (single_intept_dist / wheel_base) * sin(theta))) +
+                        wcurr_right * ((wheel_radius / 2 * cos(theta)) - (wheel_radius * (single_intept_dist / wheel_base) * sin(theta)));
+            double ydot = wcurr_left * ((wheel_radius / 2 * sin(theta)) - (wheel_radius * (single_intept_dist / wheel_base) * cos(theta))) +
+                        wcurr_right * ((wheel_radius / 2 * sin(theta)) + (wheel_radius * (single_intept_dist / wheel_base) * cos(theta)));
+            double thetadot = wcurr_right * (wheel_radius / wheel_base) - wcurr_left * (wheel_radius / wheel_base);
+
+            x += xdot * (dt / MICROSECONDS_PER_SECOND);
+            y += ydot * (dt / MICROSECONDS_PER_SECOND);
+            theta += thetadot * (dt / MICROSECONDS_PER_SECOND);
+            theta = fmod(theta, TWO_PI);
+            if (theta < 0.0) {
+                theta += TWO_PI;
+            }
+        }
+        prev_time_odom = curr_time;
+
         motor_velctrl_left.Compute();
         motor_velctrl_right.Compute();
 
