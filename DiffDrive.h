@@ -187,7 +187,8 @@ DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
               gearbox_cpr(cpr), wheel_radius(R), wheel_base(D), single_intept_dist(L),
               kp_cons(kp_conservative), ki_cons(ki_conservative), kd_cons(kd_conservative),
               kp_agg(kp_aggressive), ki_agg(ki_aggressive), kd_agg(kd_aggressive),
-              motor_velctrl_left(&wcurr_left, &cmd_left, &wtarget_left, kp_aggressive, ki_aggressive, kd_aggressive, P_ON_M, DIRECT),motor_velctrl_right(&wcurr_right, &cmd_right, &wtarget_right, kp_aggressive, ki_aggressive, kd_aggressive, P_ON_M, DIRECT) {
+              motor_velctrl_left(&wcurr_left, &cmd_left, &wtarget_left, kp_aggressive, ki_aggressive, kd_aggressive, DIRECT),
+              motor_velctrl_right(&wcurr_right, &cmd_right, &wtarget_right, kp_aggressive, ki_aggressive, kd_aggressive, DIRECT) {
     Serial.begin(115200);
     input.reserve(MAX_STR_LEN);
 
@@ -306,38 +307,38 @@ void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
         motor_velctrl_right.Compute();
 
         if (is_conservative) {
-            motor_velctrl_left.SetTunings(kp_cons, ki_cons, kd_cons, P_ON_M);
-            motor_velctrl_right.SetTunings(kp_cons, ki_cons, kd_cons, P_ON_M);
+            motor_velctrl_left.SetTunings(kp_cons, ki_cons, kd_cons);
+            motor_velctrl_right.SetTunings(kp_cons, ki_cons, kd_cons);
         } else {
-            motor_velctrl_left.SetTunings(kp_agg, ki_agg, kd_agg, P_ON_M);
-            motor_velctrl_right.SetTunings(kp_agg, ki_agg, kd_agg, P_ON_M);
+            motor_velctrl_left.SetTunings(kp_agg, ki_agg, kd_agg);
+            motor_velctrl_right.SetTunings(kp_agg, ki_agg, kd_agg);
         }
 
-        if (cmd_left > 0) {
-            digitalWrite(dir1_left, HIGH);
-            digitalWrite(dir2_left, LOW);
-            analogWrite(pwm_left, abs(cmd_left));
-        } else if (cmd_left == 0) {
+        if (wtarget_left == 0.0) {
             digitalWrite(dir1_left, LOW);
             digitalWrite(dir2_left, LOW);
             analogWrite(pwm_left, 0);
-        } else if (cmd_left < 0) {
+        } else if (cmd_left >= 0) {
             digitalWrite(dir1_left, LOW);
             digitalWrite(dir2_left, HIGH);
             analogWrite(pwm_left, abs(cmd_left));
+        } else if (cmd_left < 0) {
+            digitalWrite(dir1_left, HIGH);
+            digitalWrite(dir2_left, LOW);
+            analogWrite(pwm_left, abs(cmd_left));
         }
 
-        if (cmd_right > 0) {
-            digitalWrite(dir1_right, HIGH);
-            digitalWrite(dir2_right, LOW);
-            analogWrite(pwm_right, abs(cmd_right));
-        } else if (cmd_right == 0) {
+        if (wtarget_right == 0.0) {
             digitalWrite(dir1_right, LOW);
             digitalWrite(dir2_right, LOW);
             analogWrite(pwm_right, 0);
-        } else if (cmd_right < 0) {
+        } else if (cmd_right >= 0) {
             digitalWrite(dir1_right, LOW);
             digitalWrite(dir2_right, HIGH);
+            analogWrite(pwm_right, abs(cmd_right));
+        } else if (cmd_right < 0) {
+            digitalWrite(dir1_right, HIGH);
+            digitalWrite(dir2_right, LOW);
             analogWrite(pwm_right, abs(cmd_right));
         }
 
