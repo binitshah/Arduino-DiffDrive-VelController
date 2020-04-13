@@ -33,3 +33,8 @@ We're using a knock off Arduino Uno for the micrcontroller, a [dual MC33926](htt
 |             | VDD             | M2 5V    | M1 == LEFT Motor 5V                                                                                     |
 | A4          |                 | M2 ENC A | Motor 2's encoder A trigger.                                                                            |
 | A5          |                 | M2 ENC B | Motor 2's encoder B trigger.                                                                            |
+
+Other Setups
+------------
+
+See the other branches for other setups and pin outs.

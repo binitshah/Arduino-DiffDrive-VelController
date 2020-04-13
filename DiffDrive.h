@@ -1,5 +1,5 @@
 /**********************************************************************************************
- * Arduino Differential Drive Velocity Control Library - Version 1.0.0
+ * Arduino Differential Drive Velocity Control Library - Version 1.1.0
  * by Binit shah <bshah@ieee.org> binitshah.com
  *
  * Full duplex control over serial of a differential drive robot through velocity commands,
@@ -17,14 +17,28 @@
 #define MICROSECONDS_PER_SECOND (1e6)
 #define MAX_STR_LEN (200)
 
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
 class DiffDrive {
     public:
         PID motor_velctrl_left;
         PID motor_velctrl_right;
 
-        DiffDrive(double cpr, double R, double D, double L,
+        /*
+         * @param cpr             ticks per rev of motor
+         * @param R               radius of wheel in meters
+         * @param D               distance between wheels in meters
+         * @param L               distance to single integrator pt in meters
+         * @param serial_baud     baud rate of serial communication
+         * @param kp_conservative controller p constant used in tighter areas
+         * @param ki_conservative controller i constant used in tighter areas
+         * @param kd_conservative controller d constant used in tighter areas
+         * @param kp_aggressive   controller p constant used in open areas
+         * @param ki_aggressive   controller i constant used in open areas
+         * @param kd_aggressive   controller d constant used in open areas
+         */
+        DiffDrive(double cpr, double R, double D, double L, int serial_baud,
                   double kp_conservative, double ki_conservative, double kd_conservative,
                   double kp_aggressive, double ki_aggressive, double kd_aggressive);
 
@@ -62,13 +76,15 @@ class DiffDrive {
         void setOutputLimits(double min_pwm, double max_pwm);
 
         /*
-         * Set the bounds of the PID's output. This is typically the resolution
-         * of the microcontroller's PWM. 8-bit PWM leads to 256 steps. Param
-         * min_pwm is negative max_pwm because that's how we encode wheel
-         * direction.
+         * Set the parameters of the robot. cpr refers to the encoder
+         * counts per one revolution of the output shaft (after gearbox).
+         * R is the radius of the wheel, D is the wheel base of the robot,
+         * and L is the distance to the single integrator point.
          *
-         * @param min_pwm usually equal to negative max_pwm
-         * @param max_pwm usually equal to PWM's steps
+         * @param cpr ticks per rev of motor
+         * @param R   radius of wheel in meters
+         * @param D   distance between wheels in meters
+         * @param L   distance to single integrator pt in meters
          */
         void setRobotParams(double cpr, double R, double D, double L);
 
@@ -77,6 +93,9 @@ class DiffDrive {
          */
         void loop();
 
+        static void encoder_isr_left(uint8_t pins, uint8_t start_pin);
+        static void encoder_isr_right(uint8_t pins, uint8_t start_pin);
+
     private:
         double x, y, theta = 0.0f; // unit: x,y -> meters, theta -> rad/s
         double gearbox_cpr; // unit: counts per revolution of geared shaft
@@ -84,8 +103,6 @@ class DiffDrive {
 
         static volatile int32_t encoder_count_left, encoder_count_right; // unit: counts
         static uint8_t enc_val_left, enc_val_right;
-        static void encoder_isr_left(void);
-        static void encoder_isr_right(void);
 
         double wtarget_left, wtarget_right, wcurr_left, wcurr_right = 0.0f; // unit: rad/s
         double cmd_left, cmd_right = 0; // unit: pwm
@@ -107,48 +124,66 @@ class DiffDrive {
 const int8_t encoder_table_left[] = {0,1,-1,0,-1,0,0,1,1,0,0,-1,0,-1,1,0};
 const int8_t encoder_table_right[] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};
 
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
-volatile int32_t DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
-                           pwm_right, dir1_right, dir2_right, enca_right, encb_right>::encoder_count_left = 0;
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+volatile int32_t DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+                           pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+                           enable, slew, invert>::encoder_count_left = 0;
 
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
-volatile int32_t DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
-                           pwm_right, dir1_right, dir2_right, enca_right, encb_right>::encoder_count_right = 0;
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+volatile int32_t DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+                           pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+                           enable, slew, invert>::encoder_count_right = 0;
 
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
-uint8_t DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
-                           pwm_right, dir1_right, dir2_right, enca_right, encb_right>::enc_val_left = 0;
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+uint8_t DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+                  pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+                  enable, slew, invert>::enc_val_left = 0;
 
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
-uint8_t DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
-                           pwm_right, dir1_right, dir2_right, enca_right, encb_right>::enc_val_right = 0;
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+uint8_t DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+                  pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+                  enable, slew, invert>::enc_val_right = 0;
 
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
-void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
-               pwm_right, dir1_right, dir2_right, enca_right, encb_right>::encoder_isr_left() {
-    enc_val_left = (enc_val_left << 2) | (digitalRead(enca_left) << 1) | digitalRead(encb_left);
-
-    encoder_count_left += encoder_table_left[enc_val_left & 0b1111];
-}
-
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
-void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
-               pwm_right, dir1_right, dir2_right, enca_right, encb_right>::encoder_isr_right() {
-    enc_val_right = (enc_val_right << 2) | (digitalRead(enca_right) << 1) | digitalRead(encb_right);
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+               enable, slew, invert>::encoder_isr_right(uint8_t pins, uint8_t start_pin) {
+    enc_val_right = (enc_val_right << 2) |
+                    (((pins & bit(enca_right - start_pin)) >> (enca_right - start_pin)) << 1) |
+                    ((pins & bit(encb_right - start_pin)) >> (encb_right - start_pin));
 
     encoder_count_right += encoder_table_right[enc_val_right & 0b1111];
 }
 
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
-void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
-               pwm_right, dir1_right, dir2_right, enca_right, encb_right>::processAndReply() {
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+               enable, slew, invert>::encoder_isr_left(uint8_t pins, uint8_t start_pin) {
+    enc_val_left = (enc_val_left << 2) |
+                   (((pins & bit(enca_left - start_pin)) >> (enca_left - start_pin)) << 1) |
+                   ((pins & bit(encb_left - start_pin)) >> (encb_left - start_pin));
+
+    encoder_count_left += encoder_table_left[enc_val_left & 0b1111];
+}
+
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+               enable, slew, invert>::processAndReply() {
     char input_arr[MAX_STR_LEN];
     input.toCharArray(input_arr, MAX_STR_LEN);
 
@@ -177,11 +212,13 @@ void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
 
 // -------- Public Methods -------- //
 
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
-DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
-          pwm_right, dir1_right, dir2_right, enca_right, encb_right>::DiffDrive(
-              double cpr, double R, double D, double L,
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+          pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+          enable, slew, invert>::DiffDrive(
+              double cpr, double R, double D, double L, int serial_baud,
               double kp_conservative, double ki_conservative, double kd_conservative,
               double kp_aggressive, double ki_aggressive, double kd_aggressive) :
               gearbox_cpr(cpr), wheel_radius(R), wheel_base(D), single_intept_dist(L),
@@ -189,7 +226,7 @@ DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
               kp_agg(kp_aggressive), ki_agg(ki_aggressive), kd_agg(kd_aggressive),
               motor_velctrl_left(&wcurr_left, &cmd_left, &wtarget_left, kp_aggressive, ki_aggressive, kd_aggressive, DIRECT),
               motor_velctrl_right(&wcurr_right, &cmd_right, &wtarget_right, kp_aggressive, ki_aggressive, kd_aggressive, DIRECT) {
-    Serial.begin(115200);
+    Serial.begin(serial_baud);
     input.reserve(MAX_STR_LEN);
 
     pinMode(pwm_left, OUTPUT);
@@ -197,16 +234,58 @@ DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
     pinMode(dir2_left, OUTPUT);
     pinMode(enca_left, INPUT);
     pinMode(encb_left, INPUT);
+    pinMode(status_left, INPUT);
+    pinMode(csense_left, INPUT);
     pinMode(pwm_right, OUTPUT);
     pinMode(dir1_right, OUTPUT);
     pinMode(dir2_right, OUTPUT);
     pinMode(enca_right, INPUT);
     pinMode(encb_right, INPUT);
+    pinMode(status_right, INPUT);
+    pinMode(csense_right, INPUT);
+    pinMode(enable, OUTPUT);
+    pinMode(slew, OUTPUT);
+    pinMode(invert, OUTPUT);
 
-    attachInterrupt(enca_left, encoder_isr_left, CHANGE);
-    attachInterrupt(encb_left, encoder_isr_left, CHANGE);
-    attachInterrupt(enca_right, encoder_isr_right, CHANGE);
-    attachInterrupt(encb_right, encoder_isr_right, CHANGE);
+    if (enca_left >= 0 && enca_left <= 7 && encb_left >= 0 && encb_left <= 7) {
+        int shifta_left = enca_left - 0;
+        int shiftb_left = encb_left - 0;
+        PCMSK2 |= bit(PCINT16 + shifta_left) | bit(PCINT16 + shiftb_left);
+        PCIFR  |= bit(PCIF2);
+        PCICR  |= bit(PCIE2);
+    } else if (enca_left >= 8 && enca_left <= 13 && encb_left >= 8 && encb_left <= 13) {
+        int shifta_left = enca_left - 8;
+        int shiftb_left = encb_left - 8;
+        PCMSK0 |= bit(PCINT0 + shifta_left) | bit(PCINT0 + shiftb_left);
+        PCIFR  |= bit(PCIF0);
+        PCICR  |= bit(PCIE0);
+    } else if (enca_left >= A0 && enca_left <= A5 && encb_left >= A0 && encb_left <= A5) {
+        int shifta_left = enca_left - A0;
+        int shiftb_left = encb_left - A0;
+        PCMSK1 |= bit(PCINT8 + shifta_left) | bit(PCINT8 + shiftb_left);
+        PCIFR  |= bit(PCIF1);
+        PCICR  |= bit(PCIE1);
+    }
+
+    if (enca_right >= 0 && enca_right <= 7 && encb_right >= 0 && encb_right <= 7) {
+        int shifta_right = enca_right - 0;
+        int shiftb_right = encb_right - 0;
+        PCMSK2 |= bit(PCINT16 + shifta_right) | bit(PCINT16 + shiftb_right);
+        PCIFR  |= bit(PCIF2);
+        PCICR  |= bit(PCIE2);
+    } else if (enca_right >= 8 && enca_right <= 13 && encb_right >= 8 && encb_right <= 13) {
+        int shifta_right = enca_right - 8;
+        int shiftb_right = encb_right - 8;
+        PCMSK0 |= bit(PCINT0 + shifta_right) | bit(PCINT0 + shiftb_right);
+        PCIFR  |= bit(PCIF0);
+        PCICR  |= bit(PCIE0);
+    } else if (enca_right >= A0 && enca_right <= A5 && encb_right >= A0 && encb_right <= A5) {
+        int shifta_right = enca_right - A0;
+        int shiftb_right = encb_right - A0;
+        PCMSK1 |= bit(PCINT8 + shifta_right) | bit(PCINT8 + shiftb_right);
+        PCIFR  |= bit(PCIF1);
+        PCICR  |= bit(PCIE1);
+    }
 
     motor_velctrl_left.SetSampleTime(sample_time / 1000);
     motor_velctrl_right.SetSampleTime(sample_time / 1000);
@@ -221,19 +300,23 @@ DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
     prev_time_odom = micros();
 }
 
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
-void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
-          pwm_right, dir1_right, dir2_right, enca_right, encb_right>::setSampleTime(int sample_time_microsec) {
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+               enable, slew, invert>::setSampleTime(int sample_time_microsec) {
     sample_time = sample_time_microsec;
     motor_velctrl_left.SetSampleTime(sample_time / 1000);
     motor_velctrl_right.SetSampleTime(sample_time / 1000);
 }
 
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
-void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
-          pwm_right, dir1_right, dir2_right, enca_right, encb_right>::setPIDConstants(
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+               enable, slew, invert>::setPIDConstants(
               double kp_conservative, double ki_conservative, double kd_conservative,
               double kp_aggressive, double ki_aggressive, double kd_aggressive) {
     kp_cons = kp_conservative;
@@ -243,26 +326,30 @@ void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
     ki_agg = ki_aggressive;
     kd_agg = kd_aggressive;
     if (is_conservative) {
-        motor_velctrl_left.SetTunings(kp_cons, ki_cons, kd_cons, P_ON_M);
-        motor_velctrl_right.SetTunings(kp_cons, ki_cons, kd_cons, P_ON_M);
+        motor_velctrl_left.SetTunings(kp_cons, ki_cons, kd_cons);
+        motor_velctrl_right.SetTunings(kp_cons, ki_cons, kd_cons);
     } else {
-        motor_velctrl_left.SetTunings(kp_agg, ki_agg, kd_agg, P_ON_M);
-        motor_velctrl_right.SetTunings(kp_agg, ki_agg, kd_agg, P_ON_M);
+        motor_velctrl_left.SetTunings(kp_agg, ki_agg, kd_agg);
+        motor_velctrl_right.SetTunings(kp_agg, ki_agg, kd_agg);
     }
 }
 
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
-void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
-          pwm_right, dir1_right, dir2_right, enca_right, encb_right>::setOutputLimits(double min_pwm, double max_pwm) {
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+               enable, slew, invert>::setOutputLimits(double min_pwm, double max_pwm) {
     motor_velctrl_left.SetOutputLimits(min_pwm, max_pwm);
     motor_velctrl_right.SetOutputLimits(min_pwm, max_pwm);
 }
 
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
-void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
-          pwm_right, dir1_right, dir2_right, enca_right, encb_right>::setRobotParams(
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+               enable, slew, invert>::setRobotParams(
               double cpr, double R, double D, double L) {
     gearbox_cpr = cpr;
     wheel_radius = R;
@@ -270,10 +357,12 @@ void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
     single_intept_dist = L;
 }
 
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
-void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
-          pwm_right, dir1_right, dir2_right, enca_right, encb_right>::loop() {
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+               enable, slew, invert>::loop() {
     uint32_t curr_time = micros();
     if (curr_time - prev_time_pid > sample_time) {
         noInterrupts();
