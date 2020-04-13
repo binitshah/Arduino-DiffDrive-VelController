@@ -31,7 +31,6 @@
 #define R            (0.045)
 #define D            (0.1665)
 #define L            (0.1)
-#define SERIAL_BAUD  (115200)
 
 // PID Constants
 #define KP_CONS      (110.0f)
@@ -43,12 +42,9 @@
 
 DiffDrive<PWM_LEFT, DIR1_LEFT, DIR2_LEFT, ENCA_LEFT, ENCB_LEFT, STATUS_LEFT, CSENSE_LEFT,
           PWM_RIGHT, DIR1_RIGHT, DIR2_RIGHT, ENCA_RIGHT, ENCB_RIGHT, STATUS_RIGHT, CSENSE_RIGHT,
-          ENABLE, SLEW, INVERT> robot(CNTS_PER_REV, R, D, L, SERIAL_BAUD,
+          ENABLE, SLEW, INVERT> robot(CNTS_PER_REV, R, D, L,
                                       KP_CONS, KI_CONS, KD_CONS,
                                       KP_AGG, KI_AGG, KD_AGG);
-
-ISR(PCINT0_vect) {
-}
 
 ISR(PCINT1_vect) {
     DiffDrive<PWM_LEFT, DIR1_LEFT, DIR2_LEFT, ENCA_LEFT, ENCB_LEFT, STATUS_LEFT, CSENSE_LEFT,
@@ -63,6 +59,7 @@ ISR(PCINT2_vect) {
 }
 
 void setup() {
+    robot.begin(115200);
 }
 
 void loop() {

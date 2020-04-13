@@ -30,7 +30,6 @@ class DiffDrive {
          * @param R               radius of wheel in meters
          * @param D               distance between wheels in meters
          * @param L               distance to single integrator pt in meters
-         * @param serial_baud     baud rate of serial communication
          * @param kp_conservative controller p constant used in tighter areas
          * @param ki_conservative controller i constant used in tighter areas
          * @param kd_conservative controller d constant used in tighter areas
@@ -38,7 +37,7 @@ class DiffDrive {
          * @param ki_aggressive   controller i constant used in open areas
          * @param kd_aggressive   controller d constant used in open areas
          */
-        DiffDrive(double cpr, double R, double D, double L, int serial_baud,
+        DiffDrive(double cpr, double R, double D, double L,
                   double kp_conservative, double ki_conservative, double kd_conservative,
                   double kp_aggressive, double ki_aggressive, double kd_aggressive);
 
@@ -87,6 +86,13 @@ class DiffDrive {
          * @param L   distance to single integrator pt in meters
          */
         void setRobotParams(double cpr, double R, double D, double L);
+
+        /*
+         * Run this method once in the Arduino setup.
+         *
+         * @param baud_rate the baud rate at which serial communicates
+         */
+        void begin(uint32_t baud_rate);
 
         /*
          * Run this method once every Arduino main loop.
@@ -218,7 +224,7 @@ template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_lef
 DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
           pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
           enable, slew, invert>::DiffDrive(
-              double cpr, double R, double D, double L, int serial_baud,
+              double cpr, double R, double D, double L,
               double kp_conservative, double ki_conservative, double kd_conservative,
               double kp_aggressive, double ki_aggressive, double kd_aggressive) :
               gearbox_cpr(cpr), wheel_radius(R), wheel_base(D), single_intept_dist(L),
@@ -226,6 +232,71 @@ DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, cse
               kp_agg(kp_aggressive), ki_agg(ki_aggressive), kd_agg(kd_aggressive),
               motor_velctrl_left(&wcurr_left, &cmd_left, &wtarget_left, kp_aggressive, ki_aggressive, kd_aggressive, DIRECT),
               motor_velctrl_right(&wcurr_right, &cmd_right, &wtarget_right, kp_aggressive, ki_aggressive, kd_aggressive, DIRECT) {
+}
+
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+               enable, slew, invert>::setSampleTime(int sample_time_microsec) {
+    sample_time = sample_time_microsec;
+    motor_velctrl_left.SetSampleTime(sample_time / 1000);
+    motor_velctrl_right.SetSampleTime(sample_time / 1000);
+}
+
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+               enable, slew, invert>::setPIDConstants(
+              double kp_conservative, double ki_conservative, double kd_conservative,
+              double kp_aggressive, double ki_aggressive, double kd_aggressive) {
+    kp_cons = kp_conservative;
+    ki_cons = ki_conservative;
+    kd_cons = kd_conservative;
+    kp_agg = kp_aggressive;
+    ki_agg = ki_aggressive;
+    kd_agg = kd_aggressive;
+    if (is_conservative) {
+        motor_velctrl_left.SetTunings(kp_cons, ki_cons, kd_cons);
+        motor_velctrl_right.SetTunings(kp_cons, ki_cons, kd_cons);
+    } else {
+        motor_velctrl_left.SetTunings(kp_agg, ki_agg, kd_agg);
+        motor_velctrl_right.SetTunings(kp_agg, ki_agg, kd_agg);
+    }
+}
+
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+               enable, slew, invert>::setOutputLimits(double min_pwm, double max_pwm) {
+    motor_velctrl_left.SetOutputLimits(min_pwm, max_pwm);
+    motor_velctrl_right.SetOutputLimits(min_pwm, max_pwm);
+}
+
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+               enable, slew, invert>::setRobotParams(
+              double cpr, double R, double D, double L) {
+    gearbox_cpr = cpr;
+    wheel_radius = R;
+    wheel_base = D;
+    single_intept_dist = L;
+}
+
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+               enable, slew, invert>::begin(uint32_t serial_baud) {
     Serial.begin(serial_baud);
     input.reserve(MAX_STR_LEN);
 
@@ -298,63 +369,6 @@ DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, cse
 
     prev_time_pid = micros();
     prev_time_odom = micros();
-}
-
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
-         int enable, int slew, int invert>
-void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
-               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
-               enable, slew, invert>::setSampleTime(int sample_time_microsec) {
-    sample_time = sample_time_microsec;
-    motor_velctrl_left.SetSampleTime(sample_time / 1000);
-    motor_velctrl_right.SetSampleTime(sample_time / 1000);
-}
-
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
-         int enable, int slew, int invert>
-void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
-               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
-               enable, slew, invert>::setPIDConstants(
-              double kp_conservative, double ki_conservative, double kd_conservative,
-              double kp_aggressive, double ki_aggressive, double kd_aggressive) {
-    kp_cons = kp_conservative;
-    ki_cons = ki_conservative;
-    kd_cons = kd_conservative;
-    kp_agg = kp_aggressive;
-    ki_agg = ki_aggressive;
-    kd_agg = kd_aggressive;
-    if (is_conservative) {
-        motor_velctrl_left.SetTunings(kp_cons, ki_cons, kd_cons);
-        motor_velctrl_right.SetTunings(kp_cons, ki_cons, kd_cons);
-    } else {
-        motor_velctrl_left.SetTunings(kp_agg, ki_agg, kd_agg);
-        motor_velctrl_right.SetTunings(kp_agg, ki_agg, kd_agg);
-    }
-}
-
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
-         int enable, int slew, int invert>
-void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
-               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
-               enable, slew, invert>::setOutputLimits(double min_pwm, double max_pwm) {
-    motor_velctrl_left.SetOutputLimits(min_pwm, max_pwm);
-    motor_velctrl_right.SetOutputLimits(min_pwm, max_pwm);
-}
-
-template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
-         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
-         int enable, int slew, int invert>
-void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
-               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
-               enable, slew, invert>::setRobotParams(
-              double cpr, double R, double D, double L) {
-    gearbox_cpr = cpr;
-    wheel_radius = R;
-    wheel_base = D;
-    single_intept_dist = L;
 }
 
 template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
