@@ -37,6 +37,7 @@ DiffDrive<PWM_LEFT, DIR1_LEFT, DIR2_LEFT, ENCA_LEFT, ENCB_LEFT,
                                                                            KP_AGG, KI_AGG, KD_AGG);
 
 void setup() {
+    robot.begin(115200);
 }
 
 void loop() {

@@ -73,6 +73,13 @@ class DiffDrive {
         void setRobotParams(double cpr, double R, double D, double L);
 
         /*
+         * Run this method once in the Arduino setup.
+         *
+         * @param baud_rate the baud rate at which serial communicates
+         */
+        void begin(uint32_t baud_rate);
+
+        /*
          * Run this method once every Arduino main loop.
          */
         void loop();
@@ -189,36 +196,6 @@ DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
               kp_agg(kp_aggressive), ki_agg(ki_aggressive), kd_agg(kd_aggressive),
               motor_velctrl_left(&wcurr_left, &cmd_left, &wtarget_left, kp_aggressive, ki_aggressive, kd_aggressive, DIRECT),
               motor_velctrl_right(&wcurr_right, &cmd_right, &wtarget_right, kp_aggressive, ki_aggressive, kd_aggressive, DIRECT) {
-    Serial.begin(115200);
-    input.reserve(MAX_STR_LEN);
-
-    pinMode(pwm_left, OUTPUT);
-    pinMode(dir1_left, OUTPUT);
-    pinMode(dir2_left, OUTPUT);
-    pinMode(enca_left, INPUT);
-    pinMode(encb_left, INPUT);
-    pinMode(pwm_right, OUTPUT);
-    pinMode(dir1_right, OUTPUT);
-    pinMode(dir2_right, OUTPUT);
-    pinMode(enca_right, INPUT);
-    pinMode(encb_right, INPUT);
-
-    attachInterrupt(enca_left, encoder_isr_left, CHANGE);
-    attachInterrupt(encb_left, encoder_isr_left, CHANGE);
-    attachInterrupt(enca_right, encoder_isr_right, CHANGE);
-    attachInterrupt(encb_right, encoder_isr_right, CHANGE);
-
-    motor_velctrl_left.SetSampleTime(sample_time / 1000);
-    motor_velctrl_right.SetSampleTime(sample_time / 1000);
-
-    motor_velctrl_left.SetOutputLimits(-255, 255);
-    motor_velctrl_right.SetOutputLimits(-255, 255);
-
-    motor_velctrl_left.SetMode(AUTOMATIC);
-    motor_velctrl_right.SetMode(AUTOMATIC);
-
-    prev_time_pid = micros();
-    prev_time_odom = micros();
 }
 
 template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
@@ -268,6 +245,42 @@ void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
     wheel_radius = R;
     wheel_base = D;
     single_intept_dist = L;
+}
+
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right>::begin(uint32_t baud_rate) {
+    Serial.begin(baud_rate);
+    input.reserve(MAX_STR_LEN);
+
+    pinMode(pwm_left, OUTPUT);
+    pinMode(dir1_left, OUTPUT);
+    pinMode(dir2_left, OUTPUT);
+    pinMode(enca_left, INPUT);
+    pinMode(encb_left, INPUT);
+    pinMode(pwm_right, OUTPUT);
+    pinMode(dir1_right, OUTPUT);
+    pinMode(dir2_right, OUTPUT);
+    pinMode(enca_right, INPUT);
+    pinMode(encb_right, INPUT);
+
+    attachInterrupt(enca_left, encoder_isr_left, CHANGE);
+    attachInterrupt(encb_left, encoder_isr_left, CHANGE);
+    attachInterrupt(enca_right, encoder_isr_right, CHANGE);
+    attachInterrupt(encb_right, encoder_isr_right, CHANGE);
+
+    motor_velctrl_left.SetSampleTime(sample_time / 1000);
+    motor_velctrl_right.SetSampleTime(sample_time / 1000);
+
+    motor_velctrl_left.SetOutputLimits(-255, 255);
+    motor_velctrl_right.SetOutputLimits(-255, 255);
+
+    motor_velctrl_left.SetMode(AUTOMATIC);
+    motor_velctrl_right.SetMode(AUTOMATIC);
+
+    prev_time_pid = micros();
+    prev_time_odom = micros();
 }
 
 template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left,
