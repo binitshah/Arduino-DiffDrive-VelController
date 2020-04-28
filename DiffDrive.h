@@ -17,6 +17,11 @@
 #define MICROSECONDS_PER_SECOND (1e6)
 #define MAX_STR_LEN (200)
 
+#define ROBOT_DISABLED     (0)
+#define ROBOT_ENABLED_AGGR (1)
+#define ROBOT_ENABLED_CONS (2)
+#define ROBOT_ERRORED      (3)
+
 template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
          int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
          int enable, int slew, int invert>
@@ -88,6 +93,20 @@ class DiffDrive {
         void setRobotParams(double cpr, double R, double D, double L);
 
         /*
+         * Use this method to retrieve the state of the robot.
+         * States may be DISABLED, ENABLED_AGGR, ENABLED_CONS,
+         * ERRORED, and more. See header for definitions.
+         */
+        uint8_t getRobotState();
+
+        /*
+         * Use this method to toggle the state of the robot
+         * based on some hardstop or sensor reading. See
+         * header for definitions of robot states.
+         */
+        void toggleEnabled();
+
+        /*
          * Run this method once in the Arduino setup.
          *
          * @param baud_rate the baud rate at which serial communicates
@@ -115,6 +134,7 @@ class DiffDrive {
 
         double kp_cons, ki_cons, kd_cons, kp_agg, ki_agg, kd_agg;
         bool is_conservative = false;
+        uint8_t robot_state = ROBOT_ENABLED_AGGR;
         uint32_t sample_time = 10000; // unit: microseconds
         uint32_t prev_time_odom, prev_time_pid = 0; // unit: microseconds
         int32_t prev_encoder_count_left, prev_encoder_count_right = 0; // unit: counts
@@ -294,6 +314,32 @@ void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left
 template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
          int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
          int enable, int slew, int invert>
+uint8_t DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+                  pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+                  enable, slew, invert>::getRobotState() {
+    return robot_state;
+}
+
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
+void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
+               pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
+               enable, slew, invert>::toggleEnabled() {
+    if (robot_state == ROBOT_DISABLED) {
+        if (is_conservative) {
+            robot_state = ROBOT_ENABLED_CONS;
+        } else {
+            robot_state = ROBOT_ENABLED_AGGR;
+        }
+    } else {
+        robot_state = ROBOT_DISABLED;
+    }
+}
+
+template<int pwm_left, int dir1_left, int dir2_left, int enca_left, int encb_left, int status_left, int csense_left,
+         int pwm_right, int dir1_right, int dir2_right, int enca_right, int encb_right, int status_right, int csense_right,
+         int enable, int slew, int invert>
 void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left, csense_left,
                pwm_right, dir1_right, dir2_right, enca_right, encb_right, status_right, csense_right,
                enable, slew, invert>::begin(uint32_t serial_baud) {
@@ -317,6 +363,7 @@ void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left
     pinMode(enable, OUTPUT);
     pinMode(slew, OUTPUT);
     pinMode(invert, OUTPUT);
+    digitalWrite(enable, HIGH);
 
     if (enca_left >= 0 && enca_left <= 7 && encb_left >= 0 && encb_left <= 7) {
         int shifta_left = enca_left - 0;
@@ -406,9 +453,6 @@ void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left
         }
         prev_time_odom = curr_time;
 
-        motor_velctrl_left.Compute();
-        motor_velctrl_right.Compute();
-
         if (is_conservative) {
             motor_velctrl_left.SetTunings(kp_cons, ki_cons, kd_cons);
             motor_velctrl_right.SetTunings(kp_cons, ki_cons, kd_cons);
@@ -417,32 +461,45 @@ void DiffDrive<pwm_left, dir1_left, dir2_left, enca_left, encb_left, status_left
             motor_velctrl_right.SetTunings(kp_agg, ki_agg, kd_agg);
         }
 
-        if (wtarget_left == 0.0) {
+        if (robot_state == ROBOT_ENABLED_AGGR || robot_state == ROBOT_ENABLED_CONS) {
+            motor_velctrl_left.Compute();
+            motor_velctrl_right.Compute();
+
+            if (wtarget_left == 0.0) {
+                digitalWrite(dir1_left, LOW);
+                digitalWrite(dir2_left, LOW);
+                analogWrite(pwm_left, 0);
+            } else if (cmd_left >= 0) {
+                digitalWrite(dir1_left, LOW);
+                digitalWrite(dir2_left, HIGH);
+                analogWrite(pwm_left, abs(cmd_left));
+            } else if (cmd_left < 0) {
+                digitalWrite(dir1_left, HIGH);
+                digitalWrite(dir2_left, LOW);
+                analogWrite(pwm_left, abs(cmd_left));
+            }
+
+            if (wtarget_right == 0.0) {
+                digitalWrite(dir1_right, LOW);
+                digitalWrite(dir2_right, LOW);
+                analogWrite(pwm_right, 0);
+            } else if (cmd_right >= 0) {
+                digitalWrite(dir2_right, LOW);
+                digitalWrite(dir1_right, HIGH);
+                analogWrite(pwm_right, abs(cmd_right));
+            } else if (cmd_right < 0) {
+                digitalWrite(dir2_right, HIGH);
+                digitalWrite(dir1_right, LOW);
+                analogWrite(pwm_right, abs(cmd_right));
+            }
+        } else {
             digitalWrite(dir1_left, LOW);
             digitalWrite(dir2_left, LOW);
             analogWrite(pwm_left, 0);
-        } else if (cmd_left >= 0) {
-            digitalWrite(dir1_left, LOW);
-            digitalWrite(dir2_left, HIGH);
-            analogWrite(pwm_left, abs(cmd_left));
-        } else if (cmd_left < 0) {
-            digitalWrite(dir1_left, HIGH);
-            digitalWrite(dir2_left, LOW);
-            analogWrite(pwm_left, abs(cmd_left));
-        }
 
-        if (wtarget_right == 0.0) {
             digitalWrite(dir1_right, LOW);
             digitalWrite(dir2_right, LOW);
             analogWrite(pwm_right, 0);
-        } else if (cmd_right >= 0) {
-            digitalWrite(dir1_right, LOW);
-            digitalWrite(dir2_right, HIGH);
-            analogWrite(pwm_right, abs(cmd_right));
-        } else if (cmd_right < 0) {
-            digitalWrite(dir1_right, HIGH);
-            digitalWrite(dir2_right, LOW);
-            analogWrite(pwm_right, abs(cmd_right));
         }
 
         prev_time_pid = curr_time;
