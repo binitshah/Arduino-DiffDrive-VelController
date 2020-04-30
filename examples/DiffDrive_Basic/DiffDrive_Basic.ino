@@ -19,7 +19,7 @@
 #define ENCB_RIGHT   (19)
 
 // Robot Params
-#define CNTS_PER_REV (3591.84) // https://www.pololu.com/product/4866
+#define CNTS_PER_REV (4741.44) // https://www.pololu.com/product/4867
 #define R            (0.045)
 #define D            (0.1665)
 #define L            (0.1)
